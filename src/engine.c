@@ -1,11 +1,25 @@
 #include <config.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include "lisp.h"
 #include "engine.h"
 #include "systhread.h"
 #include "character.h"
 #include "buffer.h"
+#include "process.h"
 
 struct Lisp_Engine *main_ui_engine;
+
+static int engine_read_fd = -1;
+static int engine_write_fd = -1;
+
+static void
+engine_pipe_callback (int fd, void *data)
+{
+  char buf[16];
+  emacs_read (fd, buf, sizeof (buf));
+  process_engine_callbacks ();
+}
 
 #if defined (__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
 _Thread_local struct Lisp_Engine *current_engine;
@@ -34,6 +48,13 @@ enqueue_message (struct message_queue *q, Lisp_Object function, Lisp_Object call
     }
   sys_cond_signal (&q->cond);
   sys_mutex_unlock (&q->lock);
+
+  /* Wake up UI thread select loop if enqueuing to main UI engine */
+  if (q == &main_ui_engine->incoming_queue && engine_write_fd >= 0)
+    {
+      char byte = 1;
+      emacs_write (engine_write_fd, &byte, 1);
+    }
 }
 
 static struct engine_message *
@@ -142,6 +163,21 @@ init_engines (void)
   main_ui_engine->all_threads = all_threads;
 
   current_engine = main_ui_engine;
+
+  /* Initialize UNIX self-pipe for asynchronous notifications */
+  int fds[2];
+  if (pipe (fds) == 0)
+    {
+      engine_read_fd = fds[0];
+      engine_write_fd = fds[1];
+
+      /* Make read end non-blocking */
+      int flags = fcntl (engine_read_fd, F_GETFL, 0);
+      fcntl (engine_read_fd, F_SETFL, flags | O_NONBLOCK);
+
+      /* Register with Emacs native select/input loop */
+      add_read_fd (engine_read_fd, engine_pipe_callback, NULL);
+    }
 }
 
 void

@@ -100,6 +100,7 @@ static struct rlimit nofile_limit;
 #endif	/* subprocesses */
 
 #include "systime.h"
+#include "engine.h"
 #include "systty.h"
 
 #include "window.h"
@@ -5338,6 +5339,11 @@ wait_reading_process_output (intmax_t time_limit, int nsecs, int read_kbd,
 			     Lisp_Object wait_for_cell,
 			     struct Lisp_Process *wait_proc, int just_wait_proc)
 {
+  if (current_engine && !current_engine->is_ui_engine)
+    {
+      error ("Blocking UI or sleeping functions (like sleep-for or sit-for) are not allowed in background worker engines.");
+    }
+
   static int last_read_channel = -1;
   int channel, nfds;
   fd_set Available;
