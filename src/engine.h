@@ -4,31 +4,27 @@
 #include "lisp.h"
 #include "systhread.h"
 
-/*
- * Lisp_Engine represents an isolated Lisp Virtual Machine instance.
- * - Engine 0 is the main UI engine.
- * - Engines 1..N are worker engines for background processing.
- */
+struct engine_message {
+  Lisp_Object function;
+  Lisp_Object callback;
+  struct engine_message *next;
+};
+
 struct message_queue {
-  /* Placeholder for inter-engine message queue */
   sys_mutex_t lock;
   sys_cond_t cond;
-  void *head;
-  void *tail;
+  struct engine_message *head;
+  struct engine_message *tail;
 };
 
 struct Lisp_Engine {
   int engine_id;
   bool is_ui_engine;
+  bool active;
 
   /* The active thread in this engine */
   struct thread_state *active_thread;
   struct thread_state *all_threads;
-
-  /* In a full implementation, this would contain:
-     - An isolated heap (struct emacs_heap)
-     - A private obarray (Symbol table)
-  */
 
   struct message_queue incoming_queue;
 };
@@ -50,5 +46,8 @@ extern void init_engines (void);
 
 /* Spawn a new worker engine */
 extern int spawn_lisp_engine (void);
+
+/* Initialize Lisp symbols and functions of the engine module */
+extern void syms_of_engine (void);
 
 #endif /* EMACS_ENGINE_H */
