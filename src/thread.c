@@ -84,7 +84,7 @@ extern volatile int interrupt_input_blocked;
 
 
 
-static void
+void
 release_global_lock (void)
 {
   if (current_engine && !current_engine->is_ui_engine)
@@ -163,7 +163,7 @@ post_acquire_global_lock (struct thread_state *self)
     }
 }
 
-static void
+void
 acquire_global_lock (struct thread_state *self)
 {
   if (current_engine && !current_engine->is_ui_engine)
