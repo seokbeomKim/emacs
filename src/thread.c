@@ -27,6 +27,7 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 #include "syssignal.h"
 #include "pdumper.h"
 #include "keyboard.h"
+#include "engine.h"
 
 #ifdef HAVE_NS
 #include "nsterm.h"
@@ -61,9 +62,15 @@ static union aligned_thread_state main_thread
       .event_object = LISPSYM_INITIALLY (Qnil),
     }};
 
-struct thread_state *current_thread = &main_thread.s;
-
-struct thread_state *all_threads = &main_thread.s;
+#if defined (__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
+_Thread_local struct thread_state *current_thread = &main_thread.s;
+_Thread_local struct thread_state *all_threads = &main_thread.s;
+#elif defined (__GNUC__) || defined (__INTEL_COMPILER) || defined (__SUNPRO_C)
+__thread struct thread_state *current_thread = &main_thread.s;
+__thread struct thread_state *all_threads = &main_thread.s;
+#else
+#error "Thread-local storage is required for Multi-Engine support."
+#endif
 
 static sys_mutex_t global_lock;
 
@@ -80,6 +87,8 @@ extern volatile int interrupt_input_blocked;
 static void
 release_global_lock (void)
 {
+  if (current_engine && !current_engine->is_ui_engine)
+    return;
   sys_mutex_unlock (&global_lock);
 }
 
@@ -157,6 +166,11 @@ post_acquire_global_lock (struct thread_state *self)
 static void
 acquire_global_lock (struct thread_state *self)
 {
+  if (current_engine && !current_engine->is_ui_engine)
+    {
+      post_acquire_global_lock (self);
+      return;
+    }
   sys_mutex_lock (&global_lock);
   post_acquire_global_lock (self);
 }

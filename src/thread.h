@@ -319,8 +319,15 @@ XCONDVAR (Lisp_Object a)
   return XUNTAG (a, Lisp_Vectorlike, struct Lisp_CondVar);
 }
 
-extern struct thread_state *current_thread;
-extern struct thread_state *all_threads;
+#if defined (__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
+extern _Thread_local struct thread_state *current_thread;
+extern _Thread_local struct thread_state *all_threads;
+#elif defined (__GNUC__) || defined (__INTEL_COMPILER) || defined (__SUNPRO_C)
+extern __thread struct thread_state *current_thread;
+extern __thread struct thread_state *all_threads;
+#else
+#error "Thread-local storage is required for Multi-Engine support."
+#endif
 
 extern void finalize_one_thread (struct thread_state *state);
 extern void finalize_one_mutex (struct Lisp_Mutex *);
