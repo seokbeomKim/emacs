@@ -99,6 +99,7 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 #include "xwidget.h"
 #include "atimer.h"
 #include "blockinput.h"
+#include "engine.h"
 #include "syssignal.h"
 #include "process.h"
 #include "frame.h"
@@ -2015,6 +2016,7 @@ Using an Emacs configured with --with-x-toolkit=lucid does not have this problem
   init_alloc ();
   init_bignum ();
   init_threads ();
+  init_engines ();
   init_eval ();
   running_asynch_code = 0;
   init_random ();
