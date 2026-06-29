@@ -1,6 +1,7 @@
 #include <config.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <signal.h>
 #include "lisp.h"
 #include "engine.h"
 #include "systhread.h"
@@ -9,6 +10,8 @@
 #include "process.h"
 
 struct Lisp_Engine *main_ui_engine;
+struct Lisp_Engine *engine_list;
+sys_mutex_t engine_list_lock;
 
 static int engine_read_fd = -1;
 static int engine_write_fd = -1;
@@ -79,6 +82,10 @@ run_worker_engine (void *arg)
   struct Lisp_Engine *engine = arg;
   current_engine = engine;
 
+  sigset_t newset;
+  sigfillset (&newset);
+  pthread_sigmask (SIG_BLOCK, &newset, NULL);
+
   /* Align stack bottom and stack top for GC */
   union {
     Lisp_Object o;
@@ -86,9 +93,13 @@ run_worker_engine (void *arg)
     char c;
   } stack_pos;
 
-  struct thread_state *thr = xzalloc (sizeof (struct thread_state));
+  /* Must acquire global lock to safely allocate thread state and link into all_threads */
+  acquire_global_lock (current_thread);
+
+  struct thread_state *thr = ALLOCATE_ZEROED_PSEUDOVECTOR (struct thread_state, event_object, PVEC_THREAD);
   thr->m_lisp_eval_depth = 0;
   thr->m_stack_bottom = thr->stack_top = &stack_pos.c;
+  thr->m_current_buffer = main_ui_engine->active_thread->m_current_buffer;
 
   /* Allocate small specpdl binding stack for this thread */
   ptrdiff_t size = 50;
@@ -97,8 +108,15 @@ run_worker_engine (void *arg)
   thr->m_specpdl_end = thr->m_specpdl + size;
   thr->m_specpdl_ptr = thr->m_specpdl;
 
+  init_bc_thread (&thr->bc);
+  sys_cond_init (&thr->thread_condvar);
+
   /* Link to thread list */
+  thr->next_thread = all_threads;
   all_threads = thr;
+
+  release_global_lock ();
+
   current_thread = thr;
   engine->active_thread = thr;
   engine->all_threads = thr;
@@ -116,6 +134,15 @@ run_worker_engine (void *arg)
   sentinel->nextfree = NULL;
   sentinel->next = NULL;
   release_global_lock ();
+
+  if (sys_setjmp (c->jmp) != 0)
+    {
+      /* Uncaught Lisp error or throw in worker engine.
+         We might be holding the global lock depending on where it originated.
+         Ensure the lock is released so UI thread doesn't freeze. */
+      if (thr->not_holding_lock == 0)
+        release_global_lock ();
+    }
 
   while (engine->active)
     {
@@ -161,6 +188,10 @@ init_engines (void)
 
   main_ui_engine->active_thread = current_thread;
   main_ui_engine->all_threads = all_threads;
+
+  sys_mutex_init (&engine_list_lock);
+  engine_list = main_ui_engine;
+  main_ui_engine->next = NULL;
 
   current_engine = main_ui_engine;
 
@@ -224,14 +255,54 @@ spawn_lisp_engine (void)
   sys_mutex_init (&engine->incoming_queue.lock);
   sys_cond_init (&engine->incoming_queue.cond);
 
+  sys_mutex_lock (&engine_list_lock);
+  engine->next = engine_list;
+  engine_list = engine;
+  sys_mutex_unlock (&engine_list_lock);
+
   sys_thread_t thr;
   if (!sys_thread_create (&thr, run_worker_engine, engine))
     {
-      xfree (engine);
+      /* To avoid complexity in rollback, we simply mark it inactive and return error */
+      engine->active = false;
       return -1;
     }
 
   return engine->engine_id;
+}
+
+void
+mark_engines (void)
+{
+  sys_mutex_lock (&engine_list_lock);
+  for (struct Lisp_Engine *e = engine_list; e; e = e->next)
+    {
+      sys_mutex_lock (&e->incoming_queue.lock);
+      for (struct engine_message *msg = e->incoming_queue.head; msg; msg = msg->next)
+        {
+          mark_object (msg->function);
+          mark_object (msg->callback);
+        }
+      sys_mutex_unlock (&e->incoming_queue.lock);
+    }
+  sys_mutex_unlock (&engine_list_lock);
+}
+
+void
+engine_maybe_yield (void)
+{
+  if (current_engine && !current_engine->is_ui_engine)
+    {
+      static _Thread_local int yield_counter = 0;
+      if (++yield_counter >= 10000)
+        {
+          yield_counter = 0;
+          struct thread_state *self = current_thread;
+          release_global_lock ();
+          usleep (50); /* 50 microseconds sleep forces Linux CFS context switch and lets UI thread run */
+          acquire_global_lock (self);
+        }
+    }
 }
 
 /* Elisp Primitives */

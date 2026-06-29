@@ -27,10 +27,15 @@ struct Lisp_Engine {
   struct thread_state *all_threads;
 
   struct message_queue incoming_queue;
+  struct Lisp_Engine *next;
 };
 
 /* Global pointer to the main UI engine */
 extern struct Lisp_Engine *main_ui_engine;
+
+/* Global lock for the engine list */
+extern sys_mutex_t engine_list_lock;
+extern struct Lisp_Engine *engine_list;
 
 /* Thread-local pointer to the current engine */
 #if defined (__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
@@ -49,6 +54,12 @@ extern void process_engine_callbacks (void);
 
 /* Spawn a new worker engine */
 extern int spawn_lisp_engine (void);
+
+/* Mark engines and their message queues for GC */
+extern void mark_engines (void);
+
+/* Periodically yield global lock in worker engines */
+extern void engine_maybe_yield (void);
 
 /* Initialize Lisp symbols and functions of the engine module */
 extern void syms_of_engine (void);

@@ -64,13 +64,12 @@ static union aligned_thread_state main_thread
 
 #if defined (__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
 _Thread_local struct thread_state *current_thread = &main_thread.s;
-_Thread_local struct thread_state *all_threads = &main_thread.s;
 #elif defined (__GNUC__) || defined (__INTEL_COMPILER) || defined (__SUNPRO_C)
 __thread struct thread_state *current_thread = &main_thread.s;
-__thread struct thread_state *all_threads = &main_thread.s;
 #else
 #error "Thread-local storage is required for Multi-Engine support."
 #endif
+struct thread_state *all_threads = &main_thread.s;
 
 static sys_mutex_t global_lock;
 
@@ -87,8 +86,6 @@ extern volatile int interrupt_input_blocked;
 void
 release_global_lock (void)
 {
-  if (current_engine && !current_engine->is_ui_engine)
-    return;
   sys_mutex_unlock (&global_lock);
 }
 
@@ -108,12 +105,14 @@ unbind_for_thread_switch (struct thread_state *thr)
 }
 
 
+struct thread_state *global_current_thread = &main_thread.s;
+
 /* You must call this after acquiring the global lock.
    acquire_global_lock does it for you.  */
 static void
 post_acquire_global_lock (struct thread_state *self)
 {
-  struct thread_state *prev_thread = current_thread;
+  struct thread_state *prev_thread = global_current_thread;
 
   /* Switch the JNI interface pointer to the environment assigned to the
      current thread.  */
@@ -125,6 +124,7 @@ post_acquire_global_lock (struct thread_state *self)
      unbind_for_thread_switch might) correctly, because we are already
      running in the context of the thread pointed by SELF.  */
   current_thread = self;
+  global_current_thread = self;
 
   if (prev_thread != current_thread)
     {
@@ -166,11 +166,6 @@ post_acquire_global_lock (struct thread_state *self)
 void
 acquire_global_lock (struct thread_state *self)
 {
-  if (current_engine && !current_engine->is_ui_engine)
-    {
-      post_acquire_global_lock (self);
-      return;
-    }
   sys_mutex_lock (&global_lock);
   post_acquire_global_lock (self);
 }
@@ -850,6 +845,7 @@ run_thread (void *state)
   xfree (self->thread_name);
 
   current_thread = NULL;
+  global_current_thread = NULL;
   sys_cond_broadcast (&self->thread_condvar);
 
 #ifdef HAVE_NS

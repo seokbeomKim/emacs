@@ -3893,11 +3893,14 @@ extern void probably_quit (void);
 
    When not quitting, process any pending signals.  */
 
+extern void engine_maybe_yield (void);
+
 INLINE void
 maybe_quit (void)
 {
   if (!NILP (Vquit_flag) || pending_signals)
     probably_quit ();
+  engine_maybe_yield ();
 }
 
 /* Process a quit rarely, based on a counter COUNT, for efficiency.

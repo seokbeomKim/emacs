@@ -44,6 +44,7 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 #include "window.h"
 #include "keyboard.h"
 #include "frame.h"
+#include "engine.h"
 #include "blockinput.h"
 #include "pdumper.h"
 #include "termhooks.h"		/* For struct terminal.  */
@@ -5866,6 +5867,7 @@ garbage_collect (void)
   mark_terminals ();
   mark_kboards ();
   mark_threads ();
+  mark_engines ();
   mark_composite ();
   mark_profiler ();
 #ifdef HAVE_PGTK
