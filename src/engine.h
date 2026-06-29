@@ -44,6 +44,9 @@ extern __thread struct Lisp_Engine *current_engine;
 /* Initialize the multi-engine pool */
 extern void init_engines (void);
 
+/* Process callbacks sent to the UI engine */
+extern void process_engine_callbacks (void);
+
 /* Spawn a new worker engine */
 extern int spawn_lisp_engine (void);
 

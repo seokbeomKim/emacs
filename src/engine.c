@@ -117,6 +117,38 @@ init_engines (void)
   current_engine = main_ui_engine;
 }
 
+void
+process_engine_callbacks (void)
+{
+  if (!main_ui_engine)
+    return;
+
+  struct message_queue *q = &main_ui_engine->incoming_queue;
+
+  /* Quick lock-free check */
+  if (!q->head)
+    return;
+
+  sys_mutex_lock (&q->lock);
+  struct engine_message *msg = q->head;
+  q->head = NULL;
+  q->tail = NULL;
+  sys_mutex_unlock (&q->lock);
+
+  while (msg)
+    {
+      struct engine_message *next = msg->next;
+
+      if (!NILP (msg->function))
+        {
+          safe_calln (msg->function, msg->callback);
+        }
+
+      xfree (msg);
+      msg = next;
+    }
+}
+
 int
 spawn_lisp_engine (void)
 {

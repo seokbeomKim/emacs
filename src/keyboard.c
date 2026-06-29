@@ -83,6 +83,7 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 #include <ignore-value.h>
 
 #include "pdumper.h"
+#include "engine.h"
 
 #ifdef HAVE_WINDOW_SYSTEM
 #include TERM_HEADER
@@ -3636,6 +3637,8 @@ restore_getcjmp (void *temp)
 static bool
 readable_events (int flags)
 {
+  process_engine_callbacks ();
+
   if (flags & READABLE_EVENTS_DO_TIMERS_NOW)
     timer_check ();
 
