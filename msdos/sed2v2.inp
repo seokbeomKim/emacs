@@ -62,11 +62,11 @@
 /^#undef DATA_START/s/^.*$/#define DATA_START (\&etext + 1)/
 /^#undef GC_SETJMP_WORKS/s/^.*$/#define GC_SETJMP_WORKS 1/
 /^#undef ORDINARY_LINK/s/^.*$/#define ORDINARY_LINK 1/
-/^#undef PACKAGE_BUGREPORT/s/^.*$/#define PACKAGE_BUGREPORT ""/
+/^#undef PACKAGE_BUGREPORT/s/^.*$/#define PACKAGE_BUGREPORT "bug-gnu-emacs@gnu.org"/
 /^#undef PACKAGE_NAME/s/^.*$/#define PACKAGE_NAME ""/
 /^#undef PACKAGE_STRING/s/^.*$/#define PACKAGE_STRING ""/
 /^#undef PACKAGE_TARNAME/s/^.*$/#define PACKAGE_TARNAME ""/
-/^#undef PACKAGE_VERSION/s/^.*$/#define PACKAGE_VERSION "31.0.90"/
+/^#undef PACKAGE_VERSION/s/^.*$/#define PACKAGE_VERSION "31.1.50"/
 /^#undef SYSTEM_TYPE/s/^.*$/#define SYSTEM_TYPE "ms-dos"/
 /^#undef HAVE_DECL_GETENV/s/^.*$/#define HAVE_DECL_GETENV 1/
 /^#undef SYS_SIGLIST_DECLARED/s/^.*$/#define SYS_SIGLIST_DECLARED 1/

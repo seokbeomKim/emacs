@@ -498,6 +498,36 @@ support for those formats by default, so you might need to install
 additional support packages.  E.g., on Fedora you need to install the
 'gdk-pixbuf2-modules-extra' package.
 
+*** Resizing frames of GTK Emacs does not work on Wayland running on X11.
+
+This was reported with KDE Plasma, which recently is based on Wayland
+exclusively (as is GNOME).  The default character-wise resizing of the
+frame depends on whether the window manager is willing to process the
+hints provided by Emacs; evidently, Wayland-based window managers no
+longer do.
+
+One workaround is to customize frame-resize-pixelwise to a non-nil
+value.  Another workaround is to add a window rule in KDE Plasma's
+System Settings (under "Window Management->Application settings for
+Emacs->Size and Position") that forces KDE Plasma to obey geometry
+restrictions.
+
+Yet another solution is to use the PGTK build of Emacs, which works
+better on Wayland.
+
+*** GTK+ frames are tiny on Wayland.
+
+The initial frame and/or subsequently created frames can be tiny on
+Wayland running on X11 (aka "XWayland").  One direct consequence is that
+GTK will react with a message like this when cropping the menu bar:
+
+  Gtk-CRITICAL **: gtk_distribute_natural_allocation: assertion 'extra_space >= 0' failed
+
+This behavior has been observed with the mutter window manager (GNOME
+desktop) and the labwc compositor.  Using the PGTK build of Emacs should
+work around this issue.
+
+
 ** Lisp problems
 
 *** Changes made to .el files do not take effect.
@@ -958,6 +988,16 @@ Emacs is linked.  With LD_RUN_PATH set, the linker will include a
 specified run-time search path in the executable.
 
 Please refer to the documentation of your dynamic linker for details.
+
+*** Using Enchant 2.x as the Ispell back-end signals an error.
+
+The error message says "enchant-2: Unknown option -C".
+
+This is because many dictionary definitions in the default value of
+'ispell-dictionary-alist' use the '-C' command-line option, which is not
+supported by some versions of Enchant 2.x.  Support for '-C' was added
+to Enchant in version 2.8.17, so use that or later version to solve this
+problem.
 
 *** When you run Ispell from Emacs, it reports a "misalignment" error.
 
@@ -3177,6 +3217,25 @@ XKeymacs Version 3.47, deactivating XKeymacs when Emacs is active is
 not enough to avoid its messing with the keyboard input.  Exiting
 XKeymacs completely is reported to solve the problem.
 
+** Pasting non-ASCII characters into "emacs -nw" doesn't work.
+
+This happens if you paste using the Windows shortcuts, such as
+S-<Insert> and C-v or C-S-v.  Evidently, these paste methods support
+only ASCII text, at least in some Windows configurations.
+
+Instead, use the Emacs C-y key to paste from the clipboard, which on
+Windows works on text-only frames as well.  Make sure your
+customizations don't affect the value of 'interprogram-paste-function',
+which should be 'gui-selection-value', even in -nw sessions.  In
+addition, you should make sure the font used by the Windows Terminal
+supports the characters you paste (the default font set by Windows
+should be okay).  For best results, we also recommend to set the console
+codepage to 65001, which is the UTF-8 codepage.  You can do that with
+the following command, which should be done _before_ running Emacs on
+the Windows Terminal:
+
+  c:\> chcp 65001
+
 ** Pasting from Windows clipboard into Emacs doesn't work.
 
 This was reported to be the result of an anti-virus software blocking
@@ -3717,6 +3776,28 @@ This is because the SECONDARY selection is not implemented by the
 Wayland compositor being used.  A workaround is to use other kinds of
 selections.
 
+** Pasting non-ASCII text from Emacs into Chromium or Brave inserts mojibake.
+
+These are bugs in these browsers: they chose incorrect format of the
+copied text amongst those which Emacs provides.  Emacs provides UTF-8 as
+one of the formats, but these browsers use Latin-1 instead.  So please
+report these bugs to the developers of the respective browsers.
+
+Until the affected browsers fix these bugs, you can work around the
+problem by instructing Emacs not to offer plain-text and compound-text
+as formats of the clipboard selections.  To this end, add the following
+to your '~/.emacs' init file:
+
+  (with-eval-after-load 'select
+    (dolist (target '(TEXT STRING text/plain COMPOUND_TEXT))
+      (setq selection-converter-alist
+	    (assq-delete-all target selection-converter-alist))))
+
+Please note that this will affect all the other programs which can paste
+clipboard text, not just the problematic browsers.  For example, if some
+of those other programs cannot paste UTF-8 encoded text, they might be
+unable to paste at all as result of the above customization.
+
 ** Giant tool bar icons are displayed in some cases
 
 This is because some icon themes (such as the KDE Breeze icon theme)
@@ -3920,6 +4001,18 @@ The organization of the Settings app might disagree with that
 illustrated above, which if true you should consult the documentation
 or any search mechanism for it.
 
+** Emacs Input Methods don't work.
+
+When using the Android touchscreen keyboard, Emacs input methods set by
+'C-\' don't work.  This is because Android's virtual input methods
+function by applying editing commands directly to Emacs buffers, which
+circumvents and is not compatible with Emacs's character-centric input
+methods.  You can disable what the virtual input methods do by setting
+'overriding-text-conversion-style' to nil rather than 'lambda', at the
+cost of your virtual input method's own text editing aids, or (in some
+cases) the ability to perform character composition or input CJK or
+non-Latin scripts.
+
 ** Emacs is not compatible with the "Microsoft SwiftKey" input method.
 
 When enabled, windows are repeatedly recentered around earlier buffer
@@ -3988,6 +4081,12 @@ this form.
 The solution is to tell configure to use the correct C preprocessor
 for your C compiler (CPP="/opt/developerstudio12.6/bin/cc -E" in the
 above example).
+
+*** The Android build works with only older versions of Java.
+
+Only Java 19 and older work, because Java 19 was the last version to
+support "-source 7".  See <URL:https://debbugs.gnu.org/81211> for more
+details.
 
 ** Compilation
 

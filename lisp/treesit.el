@@ -1598,7 +1598,7 @@ variable `treesit-font-lock-feature-list'.
 
 Setting this variable directly with `setq' or `let' doesn't work;
 use `setopt' or \\[customize-option] instead."
-  :type 'integer
+  :type '(choice integer (alist :key-type symbol :value-type integer))
   :set #'treesit--font-lock-level-setter
   :version "29.1")
 
@@ -2403,10 +2403,13 @@ This variable should take the same form as
 over `treesit-simple-indent-rules'.")
 
 (defun treesit--indent-prev-line-node (pos)
-  "Return the largest node on the previous line of POS."
+  "Return the largest node on the previous (non-empty) line of POS."
   (save-excursion
     (goto-char pos)
     (when (eq (forward-line -1) 0)
+      ;; Skip blank lines.
+      (while (and (looking-at-p (rx (* (syntax whitespace)) eol))
+                  (eq (forward-line -1) 0)))
       (back-to-indentation)
       (treesit--indent-largest-node-at (point)))))
 
@@ -2559,9 +2562,11 @@ as the anchor.")
                          ;; has a prefix, indent to the beginning of
                          ;; prev line's prefix rather than the end of
                          ;; prev line's prefix. (Bug#61314).
-                         (or (and this-line-has-prefix
-                                  (match-beginning 1))
-                             (match-end 0)))))))
+                         (if this-line-has-prefix
+                             (progn
+                               (skip-syntax-forward "-")
+                               (point))
+                           (match-end 0)))))))
         (cons 'grand-parent
               (lambda (_n parent &rest _)
                 (treesit-node-start (treesit-node-parent parent))))
@@ -3810,7 +3815,7 @@ the current line if the beginning of the defun is indented."
 Return the first non-nil evaluation of BODY.
 
 \(fn (SYM VAL) &rest BODY)"
-  (declare (indent 1))
+  (declare (indent 1) (debug ((symbolp form) body)))
   (let ((result-sym (gensym))
         (val-sym (gensym))
         (sym (car sym-val))

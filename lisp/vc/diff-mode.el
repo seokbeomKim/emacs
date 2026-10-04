@@ -107,7 +107,10 @@ The value `font-lock' means to refine during font-lock.
 The value `navigation' means to refine each hunk as you visit it
 with `diff-hunk-next' or `diff-hunk-prev'.
 
-You can always manually refine a hunk with `diff-refine-hunk'."
+You can always manually refine a hunk with `diff-refine-hunk'.
+
+By default, refining a hunk in any way displays the \"shadow cursor\"
+at one end of the refined region.  See `smerge-refine-shadow-cursor'."
   :version "27.1"
   :type '(choice (const :tag "Don't refine hunks" nil)
                  (const :tag "Refine hunks during font-lock" font-lock)
@@ -2502,10 +2505,20 @@ set to nil if non-nil).  When called from Lisp this toggling
 happens when the value of optional argument OTHER-FILE considered
 as a prefix argument has a numeric value bigger than 8.
 
-Under version control, jumping to the old file means jumping to the old
-revision of the file in the manner of \\[vc-revision-other-window], \
-and occurs only when
-point is on an old changed line (i.e. a removed line)."
+Under version control (usually: in a *vc-diff* buffer), by default jump
+to the version of the file in the working tree.  This version of the
+file may be unrelated to the diff's old and new revisions.
+With a prefix argument (when called from Lisp, with optional argument
+OTHER-FILE non-nil), jump to source code corresponding to one of the
+diff's old or new revisions as follows:
+- if point is on an old changed line (i.e. a removed line),
+  jump to the old source file in the manner of \\[vc-revision-other-window]
+- otherwise, jump to the new source file,
+  either by visiting the version of the file in the working tree
+  (when the new source file is the working tree's),
+  or in the manner of \\[vc-revision-other-window].
+`diff-jump-to-old-file' non-nil and a prefix argument bigger than 8 are
+as above."
   (interactive (list current-prefix-arg last-input-event))
   ;; When pointing at a removal line, we probably want to jump to
   ;; the old location, and else to the new (i.e. as if reverting).

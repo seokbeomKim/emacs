@@ -322,8 +322,8 @@ Optional argument TYPE is type of output (nil means all)."
 				   (push (concat i j) res))))
 			     (manual-misc-manuals root)))))))
   (let* ((dest (expand-file-name "manual" root))
-	 (html-node-dir (expand-file-name "html_node" dest))
-	 (html-mono-dir (expand-file-name "html_mono" dest))
+	 (html-node-dir (expand-file-name "html_node/" dest))
+	 (html-mono-dir (expand-file-name "html_mono/" dest))
 	 (ps-dir (expand-file-name "ps" dest))
 	 (pdf-dir (expand-file-name "pdf" dest))
 	 (emacs (expand-file-name "doc/emacs/emacs.texi" root))
@@ -369,6 +369,13 @@ Optional argument TYPE is type of output (nil means all)."
     (dolist (manual misc)
       (if (member type `(nil ,manual "misc"))
 	  (manual-misc-html manual root html-node-dir html-mono-dir)))
+    ;; Auxiliary files
+    (when (member type '(nil "elisp" "elisp-mono" "elisp-node"))
+      (dolist (file '("doc/lispref/elisp_type_hierarchy.txt"
+                      "doc/lispref/elisp_type_hierarchy.jpg"))
+        (let ((file (expand-file-name file root)))
+          (copy-file file html-mono-dir t)
+          (copy-file file (expand-file-name "elisp/" html-node-dir) t))))
     (message "Manuals created in %s" dest)))
 
 (defconst manual-doctype-string
@@ -761,6 +768,9 @@ style=\"text-align:left\">")
 	      (and (equal type "lispintro")
 		   (string-match-p "\\.\\(eps\\|pdf\\)\\'" file)))
 	  (copy-file file stem)))
+    (when (equal type "lispref")
+      (copy-file "../doc/lispref/elisp_type_hierarchy.txt" stem)
+      (copy-file "../doc/lispref/elisp_type_hierarchy.jpg" stem))
     (with-temp-buffer
       (let ((outvars make-manuals-dist-output-variables)
             (case-fold-search nil))
@@ -886,7 +896,10 @@ $Date: %s $
   (unless (file-exists-p (expand-file-name "src/emacs.c" root))
     (user-error "%s doesn't seem to be the root of an Emacs source tree" root))
   (admin--require-external-package 'htmlize)
-  (let* ((newsfile (expand-file-name "etc/NEWS" root))
+  (let* ((oldnewsfile (expand-file-name (format "etc/NEWS.%s" version) root))
+         (newsfile (if (file-exists-p oldnewsfile)
+                       oldnewsfile
+                     (expand-file-name "etc/NEWS" root)))
          (orgfile (expand-file-name (format "etc/NEWS.%s.org" version) root))
          (html (format "%s.html" (file-name-base orgfile)))
          (copyright-years (format-time-string "%Y")))
@@ -896,7 +909,7 @@ $Date: %s $
 
     ;; Find the copyright range.
     (goto-char (point-min))
-    (re-search-forward "^Copyright (C) \\([0-9-]+\\) Free Software Foundation, Inc.")
+    (re-search-forward "^Copyright (C) \\([0-9, -]+\\) Free Software Foundation, Inc.")
     (setq copyright-years (match-string 1))
 
     ;; Delete some unnecessary stuff.
@@ -915,6 +928,7 @@ $Date: %s $
 
     ;; Escape some characters.
     (replace-regexp-in-region (rx "$") "@@html:&dollar;@@" (point-min) (point-max))
+    (replace-regexp-in-region (rx "[[") "[\u200B[" (point-min) (point-max))
 
     ;; Use Org-mode markers for 'symbols', 'C-x k', etc.
     (replace-regexp-in-region
@@ -933,18 +947,22 @@ $Date: %s $
     ;; Format code blocks.
     (while (re-search-forward "^    " nil t)
       (let ((elisp-block (looking-at "(")))
-        (backward-paragraph)
+        (let ((paragraph-start "^    "))
+          (backward-paragraph))
+        (unless (looking-at paragraph-separate)
+          (save-excursion (insert "\n")))
         (insert (if elisp-block
                     "\n#+BEGIN_SRC emacs-lisp"
                   "\n#+BEGIN_EXAMPLE"))
-        (forward-paragraph)
+        (let ((paragraph-start "^[^ ]"))
+          (forward-paragraph))
         (insert (if elisp-block
                     "#+END_SRC\n"
                   "#+END_EXAMPLE\n"))))
 
     ;; Delete buffer local variables.
     (goto-char (point-max))
-    (when (re-search-backward "Local variables:")
+    (when (re-search-backward "Local variables:" nil t)
       (forward-line -1)
       (delete-region (point) (point-max)))
 
